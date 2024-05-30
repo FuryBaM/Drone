@@ -4,5 +4,5 @@ public interface IEngine
 {
     void InitEngine();
 
-    void UpdateEngine(Rigidbody rigidbody, DroneInputs input);
+    void UpdateEngine(Rigidbody rigidbody, float forceCoefficient);
 }

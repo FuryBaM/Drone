@@ -1,59 +1,70 @@
-﻿using System.Collections.Generic;
+﻿using Unity.VisualScripting;
 using UnityEngine;
-using System.Linq;
-  
-[RequireComponent(typeof(DroneInputs))]
 
+[RequireComponent(typeof(DroneInputs))]
 public class DroneController : BaseRigidBody 
 {
     [Header("Control Properties")] 
-    
     [SerializeField] private float _minMaxPitch = 30f;
-
     [SerializeField] private float _minMaxRoll = 30f;
-
     [SerializeField] private float _yawPower = 4f;
-
     [SerializeField] private float _lerpSpeed = 2f;
+
+    [SerializeField] private float _baseThrottle = 0.5f;
 
     private DroneInputs _input;
 
-    private List<IEngine> _engines = new List<IEngine>();
+    [SerializeField] private DroneEngine flEngine;
+    [SerializeField] private DroneEngine frEngine;
+    [SerializeField] private DroneEngine blEngine;
+    [SerializeField] private DroneEngine brEngine;
 
-    private float _yaw;
-    private float _finalPitch;
-    private float _finalRoll;
-    private float _finalYaw;
-    
     private void Start() 
     {
         _input = GetComponent<DroneInputs>();
-        _engines = GetComponentsInChildren<IEngine>().ToList<IEngine>();
+        if (_input == null)
+        {
+            Debug.LogError("DroneInputs component not found!");
+            return;
+        }
+        flEngine.SetClockwiseRotation(true);
+        frEngine.SetClockwiseRotation(false);
+        blEngine.SetClockwiseRotation(false);
+        brEngine.SetClockwiseRotation(true);
     }
     
     protected override void HandlePhysics() 
     {
+        if (_input == null) return;
+
         HandleEngines();
-        HandleControls();
     }
-    
+
     protected virtual void HandleEngines() 
     {
-        foreach(IEngine engine in _engines) {
-            engine.UpdateEngine(_rigidBody, _input);
-        }
-    }
-    
-    protected virtual void HandleControls() 
-    {
-        float pitch = -_input.Cyclic.x * _minMaxPitch;
-        float roll = -_input.Cyclic.y * _minMaxRoll;
-        _yaw += _input.Pedals * _yawPower;
+        float throttle = _baseThrottle + _input.Throttle;
 
-        _finalPitch = Mathf.Lerp(_finalPitch, pitch, Time.deltaTime * _lerpSpeed);
-        _finalRoll = Mathf.Lerp(_finalRoll, roll, Time.deltaTime * _lerpSpeed);
-        _finalYaw = Mathf.Lerp(_finalYaw, _yaw, Time.deltaTime * _lerpSpeed);
-        Quaternion orientation = Quaternion.Euler(_finalPitch, _finalYaw, _finalRoll);
-        _rigidBody.MoveRotation(orientation);
+        // Calculate adjustments for pitch, roll, and yaw to achieve a balanced maximum angle
+        float pitchAdjustment = _input.Cyclic.y * _minMaxPitch;
+        float rollAdjustment = _input.Cyclic.x * _minMaxRoll;
+        float yawAdjustment = _input.Pedals * _yawPower;
+
+        // Calculate force coefficients for each engine
+        float flForce = throttle - pitchAdjustment + rollAdjustment - yawAdjustment;
+        float frForce = throttle - pitchAdjustment - rollAdjustment + yawAdjustment;
+        float blForce = throttle + pitchAdjustment + rollAdjustment + yawAdjustment;
+        float brForce = throttle + pitchAdjustment - rollAdjustment - yawAdjustment;
+        
+        // Ensure the coefficients are in the valid range [0, 1]
+        flForce = _input.Throttle != -1 ? Mathf.Clamp(flForce, _baseThrottle, 1) : 0;
+        frForce = _input.Throttle != -1 ? Mathf.Clamp(frForce, _baseThrottle, 1) : 0;
+        blForce = _input.Throttle != -1 ? Mathf.Clamp(blForce, _baseThrottle, 1) : 0;
+        brForce = _input.Throttle != -1 ? Mathf.Clamp(brForce, _baseThrottle, 1) : 0;
+
+        // Apply forces to each engine
+        flEngine.UpdateEngine(_rigidBody, flForce);
+        frEngine.UpdateEngine(_rigidBody, frForce);
+        blEngine.UpdateEngine(_rigidBody, blForce);
+        brEngine.UpdateEngine(_rigidBody, brForce);
     }
 }
