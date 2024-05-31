@@ -4,7 +4,12 @@
 public class DroneEngine : MonoBehaviour, IEngine 
 {
     [Header("Engine Properties")]
-    [SerializeField] private float _maxPower = 400f; // Максимальная мощность в ваттах
+    [SerializeField] private float _maxPower = 75f; // Максимальная мощность в ваттах
+    [SerializeField] private float _voltage = 12f;
+    [SerializeField] private float _current = 0;
+    [SerializeField] private float _minResistance = 2f;
+    [SerializeField] private float _currentResistance = 100f;
+    [SerializeField] private float _maxResistance = 100f;
     [SerializeField] private float _propellerRadius = 0.1f; // Радиус пропеллера в метрах
     [SerializeField] private bool _isClockwised = true;
     [SerializeField] private Transform _propeller;
@@ -16,9 +21,19 @@ public class DroneEngine : MonoBehaviour, IEngine
     [SerializeField] private float _angularVelocity = 0f;
     [SerializeField] private float _currentRPM; // Текущие обороты двигателя
     [SerializeField] private float _currentPower = 0;
+    [SerializeField] private float _torque = 0;
+    [SerializeField] private float _airVelocity = 0f;
+    [SerializeField] private float _pitch = 0f;
 
-    public void InitEngine() {
+    private void Start()
+    {
+        float maxCurrent = _maxPower / _voltage;
+        _minResistance = _voltage / maxCurrent;
+    }
 
+    public void InitEngine() 
+    {
+        // Здесь можно добавить логику инициализации двигателя при необходимости
     }
 
     public void UpdateEngine(Rigidbody rigidbody, float throttle) 
@@ -28,26 +43,48 @@ public class DroneEngine : MonoBehaviour, IEngine
 
         // Применяем тягу к дрону
         ApplyThrust(rigidbody);
-        HandlePropeller();
+        HandlePropeller(rigidbody);
     }
 
     private void CalculateThrust(float throttle)
     {
-        _currentPower = throttle * _maxPower;
+        float motorEfficiency = 0.8f;
+        
 
-        // Рассчитываем площадь сечения пропеллера
+        // Расчет целевого сопротивления на основе дросселя
+        float targetResistance;
+        if (throttle > 0)
+        {
+            float desiredCurrent = throttle * (_maxPower / _voltage);
+            targetResistance = _voltage / desiredCurrent;
+        }
+        else
+        {
+            targetResistance = _maxResistance;
+        }
+
+        _currentResistance = Mathf.Lerp(_currentResistance, targetResistance, Time.deltaTime);
+        
+        // Рассчитываем текущий ток и мощность двигателя
+        _current = _voltage / _currentResistance;
+        _currentPower = Mathf.Min(_voltage * _current, _maxPower);
+
+        // Рассчитываем угловую скорость двигателя (в радианах в секунду)
         float propellerArea = Mathf.PI * Mathf.Pow(_propellerRadius, 2);
+        float powerFactor = motorEfficiency * _currentPower;
+        _airVelocity = motorEfficiency * Mathf.Pow(2 * _currentPower / (Mathf.PI * _airDensity * Mathf.Pow(_propellerRadius*2, 2)*(1-motorEfficiency)), 1f/3f);
+        _angularVelocity = Mathf.Sqrt(2 * powerFactor / (_airDensity * Mathf.PI * Mathf.Pow(_propellerRadius, 2)));
 
-        float force = Mathf.Pow(_currentPower * _propellerRadius * 2, 2f/3f) * Mathf.Pow(_airDensity*Mathf.PI/2, 1f/3f);
-        // Рассчитываем тягу
-        _thrust = 0.7f * force;
-        // Вычисляем угловую скорость пропеллера и RPM
-        _angularVelocity = _currentPower / (_thrust * _propellerRadius);
-        _currentRPM = _angularVelocity / (2 * Mathf.PI) * 60f;
+        // Рассчитываем тягу двигателя
+        //_thrust = powerFactor / _voltage;
+        _thrust = powerFactor / _airVelocity;
+
+        // Рассчитываем крутящий момент
+        _torque = _currentPower / _angularVelocity;
+
+        // Переводим угловую скорость в RPM
+        _currentRPM = _angularVelocity * 60f / (2 * Mathf.PI);
     }
-
-
-
 
     private void ApplyThrust(Rigidbody rigidbody)
     {
@@ -63,9 +100,9 @@ public class DroneEngine : MonoBehaviour, IEngine
         _isClockwised = value;
     }
 
-    public void HandlePropeller() 
+    public void HandlePropeller(Rigidbody rigidbody) 
     {
-        if(!_propeller) 
+        if (!_propeller) 
         {
             return;
         }
@@ -73,5 +110,6 @@ public class DroneEngine : MonoBehaviour, IEngine
         // Определяем направление вращения пропеллера
         float rotationDirection = _isClockwised ? 1f : -1f; // 1 - по часовой, -1 - против часовой
         _propeller.Rotate(Vector3.up, rotationDirection * _currentRPM * Time.deltaTime);
+        rigidbody.AddTorque(rotationDirection * rigidbody.transform.up * _torque, ForceMode.Force);
     }
 }

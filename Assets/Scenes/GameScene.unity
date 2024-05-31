@@ -172,7 +172,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 753a7ab168bf619bd8d2624085829976, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxPower: 16
+  _maxPower: 30
+  _voltage: 12
+  _current: 0
+  _minResistance: 2
+  _currentResistance: 100
+  _maxResistance: 100
   _propellerRadius: 0.1
   _isClockwised: 1
   _propeller: {fileID: 219309492}
@@ -181,6 +186,7 @@ MonoBehaviour:
   _angularVelocity: 0
   _currentRPM: 0
   _currentPower: 0
+  _torque: 0
 --- !u!65 &151245872
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -486,7 +492,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 753a7ab168bf619bd8d2624085829976, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxPower: 16
+  _maxPower: 30
+  _voltage: 12
+  _current: 0
+  _minResistance: 2
+  _currentResistance: 100
+  _maxResistance: 100
   _propellerRadius: 0.1
   _isClockwised: 1
   _propeller: {fileID: 1962530249}
@@ -495,6 +506,7 @@ MonoBehaviour:
   _angularVelocity: 0
   _currentRPM: 0
   _currentPower: 0
+  _torque: 0
 --- !u!65 &629895833
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -1352,7 +1364,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 753a7ab168bf619bd8d2624085829976, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxPower: 16
+  _maxPower: 30
+  _voltage: 12
+  _current: 0
+  _minResistance: 2
+  _currentResistance: 100
+  _maxResistance: 100
   _propellerRadius: 0.1
   _isClockwised: 1
   _propeller: {fileID: 871237457}
@@ -1361,6 +1378,7 @@ MonoBehaviour:
   _angularVelocity: 0
   _currentRPM: 0
   _currentPower: 0
+  _torque: 0
 --- !u!65 &1301273724
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -1672,7 +1690,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1718562432}
   serializedVersion: 2
-  m_Mass: 0.28
+  m_Mass: 0.454
   m_Drag: 0
   m_AngularDrag: 0.05
   m_UseGravity: 1
@@ -1800,7 +1818,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 753a7ab168bf619bd8d2624085829976, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxPower: 16
+  _maxPower: 30
+  _voltage: 12
+  _current: 0
+  _minResistance: 2
+  _currentResistance: 100
+  _maxResistance: 100
   _propellerRadius: 0.1
   _isClockwised: 1
   _propeller: {fileID: 673190455}
@@ -1809,6 +1832,7 @@ MonoBehaviour:
   _angularVelocity: 0
   _currentRPM: 0
   _currentPower: 0
+  _torque: 0
 --- !u!65 &1811803420
 BoxCollider:
   m_ObjectHideFlags: 0
