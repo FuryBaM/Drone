@@ -62,13 +62,15 @@
     <Analyzer Include="C:\Users\Admin\.vscode\extensions\visualstudiotoolsforunity.vstuc-1.0.2\Analyzers\Microsoft.Unity.Analyzers.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Scripts\BLDCMotor.cs" />
+    <Compile Include="Assets\Scripts\WateringHitDetection.cs" />
     <Compile Include="Assets\Scripts\Drone\DroneEngine.cs" />
+    <Compile Include="Assets\Scripts\DirectionIndicator.cs" />
     <Compile Include="Assets\Scripts\Drone\DroneInputs.cs" />
     <Compile Include="Assets\Scripts\Drone\IEngine.cs" />
     <Compile Include="Assets\Scripts\Physics\BaseRigidBody.cs" />
     <Compile Include="Assets\Scripts\Drone\DroneController.cs" />
     <Compile Include="Assets\Scripts\Camera\CameraController.cs" />
-    <Compile Include="Assets\Scripts\DirectionIndicator.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

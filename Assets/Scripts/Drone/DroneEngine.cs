@@ -1,13 +1,16 @@
-﻿using System;
+using System;
+using Palmmedia.ReportGenerator.Core.Parser.Analysis;
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider))]
 public class DroneEngine : MonoBehaviour, IEngine 
 {
     [Header("Engine Properties")]
-    [SerializeField] private float _motorKV = 2300f;
+    [SerializeField] private float _motorKv = 2300f;
+    [SerializeField] private float _motorKt = 0.00415f;
+    [SerializeField] private float _friction = 0.01f;
+    [SerializeField] private float _backEMFConstant = 0.150f;
     [SerializeField] private float _batteryVoltage = 11.1f;
-    [SerializeField] private float _batteryCurrent = 6;
     [SerializeField] private float _propellerRadius = 0.1f; // Propeller radius in meters
     [SerializeField] private bool _isClockwised = true;
     [SerializeField] private Transform _propeller;
@@ -22,6 +25,7 @@ public class DroneEngine : MonoBehaviour, IEngine
     [SerializeField] private float _airVelocity = 0f;
     [SerializeField] private float _pitch = 0f;
     [SerializeField] private float _voltageOutput = 0f;
+    [SerializeField] private float _backEMF = 0f;
 
     public void InitEngine() 
     {
@@ -30,6 +34,10 @@ public class DroneEngine : MonoBehaviour, IEngine
 
     public void UpdateEngine(Rigidbody rigidbody, float throttle) 
     {
+        _backEMF = CalculateBackEMF(_angularVelocity);
+
+        // Рассчитываем угловую скорость
+        _angularVelocity = CalculateAngularVelocity(_voltageOutput, _backEMF, _motorKt);
         // Calculate the thrust (force lifting the propeller)
         CalculateThrust(throttle);
 
@@ -37,26 +45,20 @@ public class DroneEngine : MonoBehaviour, IEngine
         ApplyThrust(rigidbody);
         HandlePropeller(rigidbody);
     }
-
     private void CalculateThrust(float throttle)
     {
-        float voltageInput = _batteryVoltage / 4f;
-        float currentInput = _batteryCurrent / 4f;
-        
         float propellerEfficiency = 0.85f;
-        float motorEfficiency = 0.8f;
-        float controllerEfficiency = 0.95f;
-        float targetVoltageOutput = throttle * voltageInput * controllerEfficiency;
-        _voltageOutput = Mathf.Lerp(_voltageOutput, targetVoltageOutput, Time.deltaTime);
-        float currentPower = _voltageOutput * currentInput * controllerEfficiency;
+        //voltage
+        float targetVoltageOutput = throttle * _batteryVoltage;
+        _voltageOutput = Mathf.Lerp(_voltageOutput, targetVoltageOutput, Time.deltaTime * 10f);
         
         float propellerArea = Mathf.PI * Mathf.Pow(_propellerRadius, 2);
-        _currentRPM = _motorKV * _voltageOutput * motorEfficiency;
-        
-        _angularVelocity = _currentRPM * 2f * Mathf.PI / 60f;
+        float current = (_voltageOutput - _backEMF) / 10f;
+        _currentRPM = _angularVelocity * 60/(2*Mathf.PI);
 
         // Correct torque calculation
-        _torque = (currentPower / (_currentRPM / 60f)) * 60f / (2f * Mathf.PI);
+        _torque = _motorKt * current;
+        float currentPower = _torque * _currentRPM;
 
         // Correct air velocity calculation
         _airVelocity = Mathf.Pow((currentPower * propellerEfficiency)/(2 * _airDensity * propellerArea), 1f / 3f);
@@ -64,6 +66,31 @@ public class DroneEngine : MonoBehaviour, IEngine
         // Correct thrust calculation
         _thrust = 2 * _airDensity * propellerArea * Mathf.Pow(_airVelocity, 2) * propellerEfficiency;
     }
+
+    // Метод для расчета обратной ЭДС
+    float CalculateBackEMF(float angularVelocity)
+    {
+        return Mathf.Abs(angularVelocity) * _voltageOutput / _motorKv;
+    }
+
+    // Метод для расчета угловой скорости
+    float CalculateAngularVelocity(float inputVoltage, float backEMF, float loadTorque)
+    {
+        // Рассчитываем электрическую скорость мотора (обороты в минуту)
+        float electricalSpeed = (inputVoltage - backEMF) / _batteryVoltage * _motorKv;
+
+        // Рассчитываем механическую скорость мотора (радианы в секунду)
+        float mechanicalSpeed = electricalSpeed * 2 * Mathf.PI / 60;
+
+        // Рассчитываем ускорение мотора с учетом момента нагрузки и трения
+        float acceleration = (_motorKt * (inputVoltage - backEMF) - _friction * _angularVelocity - loadTorque) / 0.1f;
+
+        // Рассчитываем новую угловую скорость мотора
+        float newAngularVelocity = _angularVelocity + acceleration * Time.deltaTime;
+
+        return newAngularVelocity;
+    }
+
 
     private void ApplyThrust(Rigidbody rigidbody)
     {
