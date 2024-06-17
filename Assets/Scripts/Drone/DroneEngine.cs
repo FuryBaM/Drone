@@ -58,10 +58,10 @@ public class DroneEngine : MonoBehaviour, IEngine
 
         // Correct torque calculation
         _torque = _motorKt * current;
-        float currentPower = _torque * _currentRPM;
+        float currentPower = _voltageOutput * current;
 
         // Correct air velocity calculation
-        _airVelocity = Mathf.Pow((currentPower * propellerEfficiency)/(2 * _airDensity * propellerArea), 1f / 3f);
+        _airVelocity = Mathf.Pow((currentPower * propellerEfficiency)/(2f * _airDensity * propellerArea), 1f / 3f);
 
         // Correct thrust calculation
         _thrust = 2 * _airDensity * propellerArea * Mathf.Pow(_airVelocity, 2) * propellerEfficiency;
@@ -96,7 +96,10 @@ public class DroneEngine : MonoBehaviour, IEngine
     {
         // Calculate the thrust force applied to the drone
         Vector3 force = transform.up * _thrust;
-
+        if (float.IsNaN(_thrust))
+        {
+            force = Vector3.zero;
+        }
         // Apply the thrust force to the center of mass of the drone
         rigidbody.AddForceAtPosition(force, transform.position, ForceMode.Force);
     }
@@ -116,6 +119,10 @@ public class DroneEngine : MonoBehaviour, IEngine
         // Determine the direction of propeller rotation
         float rotationDirection = _isClockwised ? 1f : -1f; // 1 - clockwise, -1 - counter-clockwise
         _propeller.Rotate(Vector3.up, rotationDirection * _currentRPM * Time.deltaTime);
+        if (float.IsNaN(_torque))
+        {
+            _torque = 0;
+        }
         rigidbody.AddTorque(rotationDirection * transform.up * _torque, ForceMode.Force);
     }
 }
