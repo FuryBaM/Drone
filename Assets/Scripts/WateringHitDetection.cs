@@ -27,7 +27,7 @@ public class WateringHitDetection : MonoBehaviour
             }
         }
         _wetnessMap.Apply();
-        _terrain.materialTemplate.SetTexture("_WetnessMap", _wetnessMap);
+        _terrain.materialTemplate.SetTexture("_WetnessMask", _wetnessMap);
     }
 
     private void OnParticleCollision(GameObject other)
