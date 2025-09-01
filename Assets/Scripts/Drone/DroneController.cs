@@ -1,123 +1,96 @@
-﻿using Unity.VisualScripting;
-using UnityEngine;
+﻿using UnityEngine;
 
-[RequireComponent(typeof(DroneInputs))]
-public class DroneController : BaseRigidBody 
+[RequireComponent(typeof(DroneInputs), typeof(Rigidbody))]
+public class DroneController : BaseRigidBody
 {
-    [Header("Control Properties")] 
-    [SerializeField] private float _minMaxPitch = 30f;
-    [SerializeField] private float _minMaxRoll = 30f;
+    [Header("Environment")]
+    public float airDensity = 1.225f;
 
-    [SerializeField] private float _baseThrottle = 0.5f;
+    [Header("Battery")]
+    public BatteryPack battery = new BatteryPack();
 
-    private DroneInputs _input;
+    [Header("Attitude limits (deg)")]
+    public float maxPitchDeg = 30f;
+    public float maxRollDeg = 30f;
+    public float maxYawRateDeg = 120f;
 
-    [SerializeField] private DroneEngine flEngine;
-    [SerializeField] private DroneEngine frEngine;
-    [SerializeField] private DroneEngine blEngine;
-    [SerializeField] private DroneEngine brEngine;
+    [Header("Hover throttle guess")]
+    [Range(0f, 1f)] public float baseThrottle = 0.5f;
 
-    private PIDController _pitchPID;
-    private PIDController _rollPID;
-    private PIDController _yawPID;
+    [Header("PIDs")]
+    public PID pitchAnglePID = new PID { kp = 4.0f, ki = 0.0f, kd = 0.8f };
+    public PID rollAnglePID = new PID { kp = 4.0f, ki = 0.0f, kd = 0.8f };
+    public PID pitchRatePID = new PID { kp = 0.2f, ki = 0.0f, kd = 0.01f };
+    public PID rollRatePID = new PID { kp = 0.2f, ki = 0.0f, kd = 0.01f };
+    public PID yawRatePID = new PID { kp = 0.15f, ki = 0.02f, kd = 0.01f };
 
-    private void Start() 
+    [Header("Mix weights")]
+    public float kPR = 0.25f;
+    public float kY = 0.15f;
+
+    [Header("Engines (X)")]
+    public DroneEngine fl; // Front-Left  (x-, z+)
+    public DroneEngine fr; // Front-Right (x+, z+)
+    public DroneEngine bl; // Back-Left   (x-, z-)
+    public DroneEngine br; // Back-Right  (x+, z-)
+
+    DroneInputs _in;
+
+    protected override void Awake()
     {
-        _input = GetComponent<DroneInputs>();
-        if (_input == null)
-        {
-            Debug.LogError("DroneInputs component not found!");
-            return;
-        }
-
-        flEngine.SetClockwiseRotation(true);
-        frEngine.SetClockwiseRotation(false);
-        blEngine.SetClockwiseRotation(false);
-        brEngine.SetClockwiseRotation(true);
-
-        // Initialize PID controllers for pitch, roll, and yaw with tuned parameters
-        _pitchPID = new PIDController(1.3f, 0f, 1.3f);
-        _rollPID = new PIDController(1.3f, 0f, 1.3f);
-        _yawPID = new PIDController(1.0f, 0.1f, 0.5f); // Parameters for yaw PID can be adjusted as needed
-    }
-    
-    protected override void HandlePhysics() 
-    {
-        if (_input == null) return;
-
-        HandleEngines();
+        base.Awake();
+        _in = GetComponent<DroneInputs>();
+        if (!fl || !fr || !bl || !br) Debug.LogError("Assign 4 engines.");
     }
 
-    protected virtual void HandleEngines() 
+    protected override void HandlePhysics()
     {
-        float throttle = Mathf.Clamp(_baseThrottle + _input.Throttle, 0, 1);
+        float dt = Time.fixedDeltaTime;
 
-        // Get the current angles from the drone's gyroscope
-        Vector3 currentAngles = _rigidBody.rotation.eulerAngles;
-        Vector3 angularVelocity = _rigidBody.angularVelocity;
+        // текущие углы и локальные угл. скорости (град/с)
+        var eul = rb.rotation.eulerAngles;
+        float rollDeg = Mathf.DeltaAngle(0f, eul.z);
+        float pitchDeg = Mathf.DeltaAngle(0f, eul.x);
+        Vector3 wLoc = transform.InverseTransformDirection(rb.angularVelocity) * Mathf.Rad2Deg;
+        float rollRate = wLoc.z;
+        float pitchRate = wLoc.x;
+        float yawRate = wLoc.y;
 
-        float currentPitch = (currentAngles.x > 180f ? currentAngles.x - 360f : currentAngles.x) / 360f;
-        float currentRoll = (currentAngles.z > 180f ? currentAngles.z - 360f : currentAngles.z) / 360f;
-        float currentYawRate = angularVelocity.y; // Use angular velocity for yaw stabilization
+        // команды
+        float cmdPitchDeg = Mathf.Clamp(_in.Cyclic.y * maxPitchDeg, -maxPitchDeg, maxPitchDeg);
+        float cmdRollDeg = Mathf.Clamp(-_in.Cyclic.x * maxRollDeg, -maxRollDeg, maxRollDeg);
+        float cmdYawRate = Mathf.Clamp(_in.Pedals * maxYawRateDeg, -maxYawRateDeg, maxYawRateDeg);
+        float throttle = Mathf.Clamp01(baseThrottle + Mathf.Clamp(_in.Throttle, -1f, 1f));
 
-        // Calculate desired angles based on input
-        float targetPitch = _input.Cyclic.y;
-        float targetRoll = _input.Cyclic.x;
-        float targetYawRate = _input.Pedals;
+        // угол -> скорость
+        float pitchRateCmd = pitchAnglePID.Update(cmdPitchDeg - pitchDeg, dt);
+        float rollRateCmd = rollAnglePID.Update(cmdRollDeg - rollDeg, dt);
 
-        // Calculate adjustments using PID controllers
-        float pitchAdjustment = _pitchPID.Update(targetPitch * (_minMaxPitch / 360f) - currentPitch, Time.deltaTime);
-        float rollAdjustment = _rollPID.Update(targetRoll * (_minMaxRoll / 360f) + currentRoll, Time.deltaTime);
-        float yawAdjustment = _yawPID.Update(targetYawRate - currentYawRate, Time.deltaTime);
+        // скорость -> момент (нормированные управляющие)
+        float uPitch = Mathf.Clamp(pitchRatePID.Update(pitchRateCmd - pitchRate, dt), -1f, 1f);
+        float uRoll = Mathf.Clamp(rollRatePID.Update(rollRateCmd - rollRate, dt), -1f, 1f);
+        float uYaw = Mathf.Clamp(yawRatePID.Update(cmdYawRate - yawRate, dt), -1f, 1f);
 
-        // Clamp adjustments to prevent excessive force
-        pitchAdjustment = Mathf.Clamp(pitchAdjustment, -1f, 1f);
-        rollAdjustment = Mathf.Clamp(rollAdjustment, -1f, 1f);
-        yawAdjustment = Mathf.Clamp(yawAdjustment, -1f, 1f);
+        // миксер
+        float flCmd = throttle - kPR * uPitch - kPR * uRoll + kY * (fl.Clockwise ? -uYaw : +uYaw);
+        float frCmd = throttle - kPR * uPitch + kPR * uRoll + kY * (fr.Clockwise ? -uYaw : +uYaw);
+        float blCmd = throttle + kPR * uPitch - kPR * uRoll + kY * (bl.Clockwise ? -uYaw : +uYaw);
+        float brCmd = throttle + kPR * uPitch + kPR * uRoll + kY * (br.Clockwise ? -uYaw : +uYaw);
 
-        // Calculate force coefficients for each engine
-        float flForce = throttle - pitchAdjustment + rollAdjustment + yawAdjustment;
-        float frForce = throttle - pitchAdjustment - rollAdjustment - yawAdjustment;
-        float blForce = throttle + pitchAdjustment + rollAdjustment - yawAdjustment;
-        float brForce = throttle + pitchAdjustment - rollAdjustment + yawAdjustment;
-        
-        // Ensure the coefficients are in the valid range [0, 1]
-        flForce = Mathf.Clamp(flForce, 0, 1);
-        frForce = Mathf.Clamp(frForce, 0, 1);
-        blForce = Mathf.Clamp(blForce, 0, 1);
-        brForce = Mathf.Clamp(brForce, 0, 1);
+        // нормализация по максимуму, затем кламп 0..1
+        float maxCmd = Mathf.Max(flCmd, frCmd, blCmd, brCmd, 1f);
+        if (maxCmd > 1f) { float inv = 1f / maxCmd; flCmd *= inv; frCmd *= inv; blCmd *= inv; brCmd *= inv; }
+        flCmd = Mathf.Clamp01(flCmd); frCmd = Mathf.Clamp01(frCmd); blCmd = Mathf.Clamp01(blCmd); brCmd = Mathf.Clamp01(brCmd);
 
-        // Apply forces to each engine
-        flEngine.UpdateEngine(_rigidBody, flForce);
-        frEngine.UpdateEngine(_rigidBody, frForce);
-        blEngine.UpdateEngine(_rigidBody, blForce);
-        brEngine.UpdateEngine(_rigidBody, brForce);
-    }
-}
+        // первый проход: считаем токи моторов при текущем Vbat
+        float Vbat_now = Mathf.Max(0.1f, battery.Vbat == 0f ? battery.ocvPerCell.Evaluate(battery.SOC) * battery.cells : battery.Vbat);
+        float I1 = fl.StepEngine(rb, flCmd, Vbat_now, airDensity);
+        float I2 = fr.StepEngine(rb, frCmd, Vbat_now, airDensity);
+        float I3 = bl.StepEngine(rb, blCmd, Vbat_now, airDensity);
+        float I4 = br.StepEngine(rb, brCmd, Vbat_now, airDensity);
 
-// Simple PID Controller class
-public class PIDController
-{
-    private float _kp;
-    private float _ki;
-    private float _kd;
-    
-    private float _integral;
-    private float _previousError;
-
-    public PIDController(float kp, float ki, float kd)
-    {
-        _kp = kp;
-        _ki = ki;
-        _kd = kd;
-    }
-
-    public float Update(float error, float deltaTime)
-    {
-        _integral += error * deltaTime;
-        float derivative = (error - _previousError) / deltaTime;
-        _previousError = error;
-
-        return _kp * error + _ki * _integral + _kd * derivative;
+        // обновить батарею (просадка и SOC)
+        float Itot = I1 + I2 + I3 + I4;
+        battery.Step(Itot, dt);
     }
 }

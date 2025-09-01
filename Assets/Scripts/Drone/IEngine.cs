@@ -1,8 +1,7 @@
-﻿using UnityEngine;
-
-public interface IEngine 
+﻿public interface IEngine
 {
-    void InitEngine();
-
-    void UpdateEngine(Rigidbody rigidbody, float forceCoefficient);
+    bool Clockwise { get; }
+    void SetClockwiseRotation(bool cw);
+    // Возвращает ток, потребленный от батареи (A) за текущий шаг
+    float StepEngine(UnityEngine.Rigidbody rb, float duty01, float vbat, float rho);
 }

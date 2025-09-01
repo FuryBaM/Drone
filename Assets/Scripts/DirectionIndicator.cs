@@ -22,7 +22,7 @@ public class DirectionIndicator : MonoBehaviour
     {
         if (_targetRigidbody != null && _indicator != null)
         {
-            Vector3 velocityDirection = _targetRigidbody.velocity.normalized;
+            Vector3 velocityDirection = _targetRigidbody.linearVelocity.normalized;
             _indicator.transform.position = transform.position + velocityDirection * _indicatorDistance;
             Quaternion targetRotation = Quaternion.LookRotation(velocityDirection, transform.up);
             _indicator.transform.rotation = Quaternion.RotateTowards(_indicator.transform.rotation, targetRotation, _indicatorRotationSpeed * Time.deltaTime);
